@@ -15,5 +15,4 @@ interface ImportMeta {
 
 interface Window {
   adsbygoogle?: Record<string, unknown>[]
-  __deferredPwaPrompt?: Event | null
 }
