@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute, AdminRoute, GuruRoute, GuestRoute } from '@/routes/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { OfflineBanner } from '@/components/shared/OfflineBanner'
+import { InstallPrompt } from '@/components/shared/InstallPrompt'
 import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
@@ -30,6 +31,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <OfflineBanner />
+          <InstallPrompt />
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route element={<GuestRoute />}>
