@@ -4,9 +4,9 @@ Aplikasi PWA literasi perpustakaan digital — pinjam buku, aktivitas literasi, 
 
 ## Fitur
 
-- **Siswa (member)**: baca buku PDF di browser, aktivitas literasi, poin
-- **Guru**: daftar/login sebagai guru, unggah & kelola buku digital (PDF + cover opsional)
-- **Admin**: dashboard, kelola aktivitas literasi, persetujuan submission
+- **Siswa (member)**: baca buku PDF, modul literasi (baca → kuis → tugas), skor & poin
+- **Guru**: kelola buku digital, buat modul literasi (materi + upload + kuis + tugas), nilai tugas siswa
+- **Admin**: dashboard, kelola literasi, persetujuan submission
 - **Digital only**: tidak ada stok/peminjaman fisik — semua buku tersedia sebagai PDF
 - **PWA**: installable, offline shell, auto-update service worker
 
@@ -36,6 +36,7 @@ npm install
      2. [`002b_digital_guru.sql`](supabase/migrations/002b_digital_guru.sql) — Run
    - Jangan gabungkan keduanya dalam satu Run (PostgreSQL error `unsafe use of new value "guru"`).
    - **Error daftar** `type "user_role" does not exist`: jalankan [`003_repair_signup.sql`](supabase/migrations/003_repair_signup.sql) di SQL Editor.
+   - **Modul literasi guru** (materi, kuis, tugas, skor): jalankan [`004_literacy_guru.sql`](supabase/migrations/004_literacy_guru.sql).
 3. Pastikan **Authentication → Email** aktif
 4. Bucket `book-covers` dan `book-pdfs` dibuat otomatis oleh migrasi
 

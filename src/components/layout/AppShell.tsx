@@ -26,6 +26,7 @@ const memberNav = [
 const guruNav = [
   { to: '/catalog', label: 'Perpustakaan', icon: Library },
   { to: '/guru/books', label: 'Kelola Buku', icon: Upload },
+  { to: '/guru/literacy', label: 'Literasi', icon: Sparkles },
   { to: '/profile', label: 'Profil', icon: User },
 ]
 

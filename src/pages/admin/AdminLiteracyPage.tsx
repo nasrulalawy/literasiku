@@ -18,9 +18,10 @@ import type { LiteracyActivity, ActivitySubmission } from '@/types/database'
 
 const activitySchema = z.object({
   title: z.string().min(1),
-  type: z.enum(['quiz', 'reading_log', 'review']),
+  type: z.enum(['quiz', 'reading_log', 'review', 'literacy_module']),
   description: z.string().min(1),
   points_reward: z.number().min(1),
+  max_score: z.number().min(1).max(100).optional(),
   active: z.boolean(),
 })
 
@@ -131,8 +132,14 @@ export function AdminLiteracyPage() {
                   <div>
                     <p className="font-medium">{sub.activity?.title}</p>
                     <p className="text-sm text-[var(--color-muted-foreground)]">{sub.profile?.full_name}</p>
-                    <p className="mt-1 text-xs line-clamp-2">
-                      {JSON.stringify(sub.content)}
+                    <p className="mt-1 text-xs">
+                      {(sub.content as { quiz_score?: number }).quiz_score != null && (
+                        <span>Kuis: {(sub.content as { quiz_score?: number }).quiz_score}/100 · </span>
+                      )}
+                      <span className="line-clamp-2">
+                        {(sub.content as { assignment_answer?: string }).assignment_answer ||
+                          JSON.stringify(sub.content)}
+                      </span>
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -188,6 +195,7 @@ export function AdminLiteracyPage() {
             <div>
               <Label>Tipe</Label>
               <Select className="mt-1" {...register('type')}>
+                <option value="literacy_module">Modul Literasi (baca + kuis + tugas)</option>
                 <option value="reading_log">Log Membaca</option>
                 <option value="review">Resensi</option>
                 <option value="quiz">Kuis</option>
@@ -200,6 +208,10 @@ export function AdminLiteracyPage() {
             <div>
               <Label>Poin Reward</Label>
               <Input type="number" className="mt-1" {...register('points_reward', { valueAsNumber: true })} />
+            </div>
+            <div>
+              <Label>Skor Maksimum (modul literasi)</Label>
+              <Input type="number" className="mt-1" {...register('max_score', { valueAsNumber: true })} />
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" {...register('active')} />

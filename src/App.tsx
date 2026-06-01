@@ -16,6 +16,7 @@ import { LiteracyPage } from '@/pages/LiteracyPage'
 import { LiteracyDetailPage } from '@/pages/LiteracyDetailPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { ManageBooksPage } from '@/pages/books/ManageBooksPage'
+import { ManageLiteracyPage } from '@/pages/guru/ManageLiteracyPage'
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
 import { AdminLiteracyPage } from '@/pages/admin/AdminLiteracyPage'
 
@@ -50,6 +51,7 @@ export default function App() {
 
                 <Route element={<GuruRoute />}>
                   <Route path="/guru/books" element={<ManageBooksPage />} />
+                  <Route path="/guru/literacy" element={<ManageLiteracyPage />} />
                 </Route>
 
                 <Route element={<AdminRoute />}>

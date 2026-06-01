@@ -7,13 +7,15 @@ import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { parseQuizQuestions } from '@/lib/literacy'
+import { LiteracyModuleFlow } from '@/components/literacy/LiteracyModuleFlow'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import type { LiteracyActivity } from '@/types/database'
+import type { LiteracyActivity, ActivitySubmission } from '@/types/database'
 
 const formSchema = z.object({
   answer: z.string().min(10, 'Minimal 10 karakter'),
@@ -32,7 +34,10 @@ export function LiteracyDetailPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from('literacy_activities').select('*').eq('id', id!).single()
       if (error) throw error
-      return data as LiteracyActivity
+      return {
+        ...(data as LiteracyActivity),
+        quiz_questions: parseQuizQuestions(data.quiz_questions),
+      }
     },
     enabled: !!id,
   })
@@ -46,7 +51,7 @@ export function LiteracyDetailPage() {
         .eq('activity_id', id!)
         .eq('user_id', user!.id)
         .maybeSingle()
-      return data
+      return data as ActivitySubmission | null
     },
     enabled: !!id && !!user?.id,
   })
@@ -81,7 +86,7 @@ export function LiteracyDetailPage() {
       }
     },
     onSuccess: () => {
-      toast.success('Jawaban terkirim! Menunggu persetujuan admin.')
+      toast.success('Jawaban terkirim! Menunggu persetujuan.')
       queryClient.invalidateQueries({ queryKey: ['submission', id] })
       navigate('/literacy')
     },
@@ -98,7 +103,7 @@ export function LiteracyDetailPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <div className="space-y-6 max-w-2xl">
       <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Kembali
@@ -110,28 +115,37 @@ export function LiteracyDetailPage() {
         <p className="mt-2 text-[var(--color-muted-foreground)]">{activity.description}</p>
       </div>
 
-      {existing && (
-        <div className="rounded-lg border bg-amber-50 p-4 text-sm">
-          Status pengiriman: <strong>{existing.status}</strong>
-          {existing.status === 'approved' && ` · ${existing.points_awarded} poin diterima`}
-        </div>
-      )}
-
-      {existing?.status === 'approved' ? null : (
-        <form onSubmit={handleSubmit((d) => submitMutation.mutate(d))} className="space-y-4">
-          <div>
-            <Label htmlFor="answer">{labels[activity.type]}</Label>
-            {activity.type === 'quiz' ? (
-              <Input id="answer" className="mt-1" {...register('answer')} />
-            ) : (
-              <Textarea id="answer" rows={6} className="mt-1" {...register('answer')} />
-            )}
-            {errors.answer && <p className="mt-1 text-xs text-red-500">{errors.answer.message}</p>}
-          </div>
-          <Button type="submit" disabled={submitMutation.isPending}>
-            {submitMutation.isPending ? 'Mengirim...' : existing ? 'Perbarui Jawaban' : 'Kirim Jawaban'}
-          </Button>
-        </form>
+      {activity.type === 'literacy_module' ? (
+        <LiteracyModuleFlow
+          activity={activity}
+          existing={existing}
+          onSubmitted={() => queryClient.invalidateQueries({ queryKey: ['submission', id] })}
+        />
+      ) : (
+        <>
+          {existing && (
+            <div className="rounded-lg border bg-amber-50 p-4 text-sm">
+              Status: <strong>{existing.status}</strong>
+              {existing.status === 'approved' && ` · ${existing.points_awarded} poin`}
+            </div>
+          )}
+          {existing?.status === 'approved' ? null : (
+            <form onSubmit={handleSubmit((d) => submitMutation.mutate(d))} className="space-y-4">
+              <div>
+                <Label htmlFor="answer">{labels[activity.type]}</Label>
+                {activity.type === 'quiz' ? (
+                  <Input id="answer" className="mt-1" {...register('answer')} />
+                ) : (
+                  <Textarea id="answer" rows={6} className="mt-1" {...register('answer')} />
+                )}
+                {errors.answer && <p className="mt-1 text-xs text-red-500">{errors.answer.message}</p>}
+              </div>
+              <Button type="submit" disabled={submitMutation.isPending}>
+                {submitMutation.isPending ? 'Mengirim...' : existing ? 'Perbarui' : 'Kirim'}
+              </Button>
+            </form>
+          )}
+        </>
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 
 export async function uploadToBucket(
-  bucket: 'book-covers' | 'book-pdfs',
+  bucket: 'book-covers' | 'book-pdfs' | 'literacy-files',
   path: string,
   file: File,
 ) {
