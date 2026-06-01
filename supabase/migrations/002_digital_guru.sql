@@ -1,0 +1,7 @@
+-- DEPRECATED: Jangan jalankan file ini sekaligus (error enum "guru").
+--
+-- Gunakan dua langkah terpisah di Supabase SQL Editor:
+--   1. 002a_add_guru_enum.sql   → Run (tunggu sukses)
+--   2. 002b_digital_guru.sql    → Run
+--
+-- Lihat README bagian migrasi Supabase.
