@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Check, X, FileText, Users } from 'lucide-react'
+import { Plus, Pencil, Check, X, FileText, Users, AlertCircle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { uploadToBucket } from '@/lib/upload'
 import { parseQuizQuestions } from '@/lib/literacy'
+import { fetchGuruLiteracySubmissions, formatQuizAnswers, type GuruSubmissionRow } from '@/lib/guru-literacy'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,8 +17,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { QuizQuestionEditor } from '@/components/literacy/QuizQuestionEditor'
-import type { LiteracyActivity, ActivitySubmission, QuizQuestion } from '@/types/database'
+import type { LiteracyActivity, QuizQuestion } from '@/types/database'
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Judul wajib'),
@@ -30,6 +32,142 @@ const moduleSchema = z.object({
 })
 
 type ModuleForm = z.infer<typeof moduleSchema>
+type SubmissionFilter = 'pending' | 'approved' | 'rejected' | 'all'
+
+const statusLabels: Record<string, string> = {
+  pending: 'Menunggu nilai',
+  approved: 'Disetujui',
+  rejected: 'Ditolak',
+}
+
+function SubmissionCard({
+  sub,
+  gradingId,
+  gradeScore,
+  gradeFeedback,
+  onStartGrade,
+  onCancelGrade,
+  onScoreChange,
+  onFeedbackChange,
+  onApprove,
+  onReject,
+  grading,
+}: {
+  sub: GuruSubmissionRow
+  gradingId: string | null
+  gradeScore: number
+  gradeFeedback: string
+  onStartGrade: () => void
+  onCancelGrade: () => void
+  onScoreChange: (n: number) => void
+  onFeedbackChange: (s: string) => void
+  onApprove: () => void
+  onReject: () => void
+  grading: boolean
+}) {
+  const quizLines = formatQuizAnswers(sub.activity.quiz_questions, sub.content.quiz_answers)
+  const isGrading = gradingId === sub.id
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="font-semibold">{sub.studentName}</p>
+            <p className="text-sm text-[var(--color-muted-foreground)]">{sub.activity.title}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+              Dikumpulkan: {new Date(sub.created_at).toLocaleString('id-ID')}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={sub.status === 'pending' ? 'default' : 'secondary'}>
+              {statusLabels[sub.status]}
+            </Badge>
+            <Badge variant="outline">Kuis otomatis: {sub.content.quiz_score ?? 0}/100</Badge>
+            {sub.score != null && sub.status !== 'pending' && (
+              <Badge>Skor akhir: {sub.score}/{sub.activity.max_score}</Badge>
+            )}
+          </div>
+        </div>
+
+        {quizLines.length > 0 && (
+          <div className="rounded-lg border bg-white p-3 text-sm">
+            <p className="mb-2 text-xs font-semibold uppercase text-[var(--color-muted-foreground)]">
+              Jawaban Kuis
+            </p>
+            <ul className="space-y-2">
+              {quizLines.map((line, i) => (
+                <li key={i}>
+                  <p className="font-medium">{line.label}</p>
+                  <p className={line.correct ? 'text-green-700' : 'text-red-700'}>
+                    → {line.answer} {line.correct ? '✓' : '✗'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="rounded-lg bg-slate-50 p-3 text-sm">
+          <p className="text-xs font-semibold uppercase text-[var(--color-muted-foreground)]">Jawaban Tugas</p>
+          <p className="mt-1 whitespace-pre-wrap">{sub.content.assignment_answer?.trim() || '—'}</p>
+        </div>
+
+        {sub.feedback && sub.status !== 'pending' && (
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            <span className="font-medium">Feedback: </span>
+            {sub.feedback}
+          </p>
+        )}
+
+        {isGrading ? (
+          <div className="space-y-2 border-t pt-3">
+            <div>
+              <Label>Skor literasi (0–{sub.activity.max_score})</Label>
+              <Input
+                type="number"
+                min={0}
+                max={sub.activity.max_score}
+                className="mt-1"
+                value={gradeScore}
+                onChange={(e) => onScoreChange(Number(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+                Saran: gabungkan hasil kuis ({sub.content.quiz_score ?? 0}) dengan kualitas tugas.
+              </p>
+            </div>
+            <div>
+              <Label>Feedback untuk siswa (opsional)</Label>
+              <Textarea
+                className="mt-1"
+                rows={2}
+                value={gradeFeedback}
+                onChange={(e) => onFeedbackChange(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" disabled={grading} onClick={onApprove}>
+                <Check className="mr-1 h-4 w-4" />
+                Setujui & beri skor
+              </Button>
+              <Button size="sm" variant="outline" disabled={grading} onClick={onReject}>
+                <X className="mr-1 h-4 w-4" />
+                Tolak
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onCancelGrade}>
+                Batal
+              </Button>
+            </div>
+          </div>
+        ) : sub.status === 'pending' ? (
+          <Button size="sm" onClick={onStartGrade}>
+            Nilai & setujui
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
 
 export function ManageLiteracyPage() {
   const { user } = useAuth()
@@ -38,6 +176,7 @@ export function ManageLiteracyPage() {
   const [editing, setEditing] = useState<LiteracyActivity | null>(null)
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [materialFile, setMaterialFile] = useState<File | null>(null)
+  const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>('pending')
   const [gradingId, setGradingId] = useState<string | null>(null)
   const [gradeScore, setGradeScore] = useState(0)
   const [gradeFeedback, setGradeFeedback] = useState('')
@@ -60,30 +199,14 @@ export function ManageLiteracyPage() {
     enabled: !!user?.id,
   })
 
-  const { data: submissions } = useQuery({
-    queryKey: ['guru-literacy-submissions', user?.id],
-    queryFn: async () => {
-      const { data: mods, error: modErr } = await supabase
-        .from('literacy_activities')
-        .select('id')
-        .eq('created_by', user!.id)
-        .eq('type', 'literacy_module')
-      if (modErr) throw modErr
-      const ids = mods?.map((m) => m.id) ?? []
-      if (!ids.length) return []
-
-      const { data, error } = await supabase
-        .from('activity_submissions')
-        .select('*, activity:literacy_activities(title), profile:profiles(full_name)')
-        .in('activity_id', ids)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data as (ActivitySubmission & {
-        activity: { title: string }
-        profile: { full_name: string }
-      })[]
-    },
+  const {
+    data: submissions,
+    isLoading: submissionsLoading,
+    error: submissionsError,
+    refetch: refetchSubmissions,
+  } = useQuery({
+    queryKey: ['guru-literacy-submissions', user?.id, submissionFilter],
+    queryFn: () => fetchGuruLiteracySubmissions(user!.id, submissionFilter),
     enabled: !!user?.id,
   })
 
@@ -173,36 +296,51 @@ export function ManageLiteracyPage() {
       status,
       score,
       feedback,
+      maxScore,
     }: {
       id: string
       status: 'approved' | 'rejected'
       score: number
       feedback: string
+      maxScore: number
     }) => {
-      const { error } = await supabase
+      const clamped = Math.max(0, Math.min(maxScore, score))
+      const { data, error } = await supabase
         .from('activity_submissions')
         .update({
           status,
-          score,
-          feedback: feedback || null,
+          score: clamped,
+          feedback: feedback.trim() || null,
           graded_by: user!.id,
         })
         .eq('id', id)
+        .select('id, status, score')
+        .single()
+
       if (error) throw error
+      if (!data) throw new Error('Tidak ada baris yang diperbarui. Periksa hak akses guru di database.')
+      return data
     },
-    onSuccess: () => {
-      toast.success('Penilaian disimpan')
+    onSuccess: (_, vars) => {
+      toast.success(vars.status === 'approved' ? 'Skor disetujui & poin siswa diperbarui' : 'Pengumpulan ditolak')
       setGradingId(null)
       queryClient.invalidateQueries({ queryKey: ['guru-literacy-submissions'] })
+      queryClient.invalidateQueries({ queryKey: ['my-literacy-scores'] })
+      queryClient.invalidateQueries({ queryKey: ['literacy-activities'] })
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : 'Gagal menyimpan penilaian')
     },
   })
 
-  const startGrade = (sub: ActivitySubmission) => {
+  const startGrade = (sub: GuruSubmissionRow) => {
     const quizScore = sub.content.quiz_score ?? 0
     setGradingId(sub.id)
     setGradeScore(sub.score ?? quizScore)
     setGradeFeedback(sub.feedback ?? '')
   }
+
+  const pendingCount = submissions?.filter((s) => s.status === 'pending').length
 
   return (
     <div className="space-y-8">
@@ -210,7 +348,7 @@ export function ManageLiteracyPage() {
         <div>
           <h1 className="text-2xl font-bold">Kelola Literasi</h1>
           <p className="text-[var(--color-muted-foreground)]">
-            Buat materi, kuis & tugas — tinjau pengumpulan siswa
+            Buat modul, lihat pengumpulan siswa, dan beri skor
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -219,95 +357,92 @@ export function ManageLiteracyPage() {
         </Button>
       </div>
 
-      {submissions && submissions.length > 0 && (
-        <section>
-          <h2 className="mb-3 flex items-center gap-2 font-semibold">
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Users className="h-5 w-5" />
-            Tugas Menunggu Review ({submissions.length})
+            Pengumpulan Siswa
+            {submissionFilter === 'pending' && pendingCount != null && pendingCount > 0 && (
+              <Badge>{pendingCount}</Badge>
+            )}
           </h2>
-          <div className="space-y-3">
-            {submissions.map((sub) => (
-              <Card key={sub.id}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium">{sub.activity?.title}</p>
-                      <p className="text-sm text-[var(--color-muted-foreground)]">{sub.profile?.full_name}</p>
-                    </div>
-                    <Badge variant="secondary">Kuis: {sub.content.quiz_score ?? 0}/100</Badge>
-                  </div>
-                  <div className="rounded-lg bg-slate-50 p-3 text-sm">
-                    <p className="font-medium text-xs text-[var(--color-muted-foreground)]">Jawaban Tugas</p>
-                    <p className="mt-1 whitespace-pre-wrap">{sub.content.assignment_answer || '—'}</p>
-                  </div>
-                  {gradingId === sub.id ? (
-                    <div className="space-y-2 border-t pt-3">
-                      <div>
-                        <Label>Skor Literasi (0–100)</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          className="mt-1"
-                          value={gradeScore}
-                          onChange={(e) => setGradeScore(Number(e.target.value))}
-                        />
-                      </div>
-                      <div>
-                        <Label>Feedback (opsional)</Label>
-                        <Textarea
-                          className="mt-1"
-                          rows={2}
-                          value={gradeFeedback}
-                          onChange={(e) => setGradeFeedback(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            gradeMutation.mutate({
-                              id: sub.id,
-                              status: 'approved',
-                              score: gradeScore,
-                              feedback: gradeFeedback,
-                            })
-                          }
-                        >
-                          <Check className="mr-1 h-4 w-4" />
-                          Setujui
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            gradeMutation.mutate({
-                              id: sub.id,
-                              status: 'rejected',
-                              score: gradeScore,
-                              feedback: gradeFeedback,
-                            })
-                          }
-                        >
-                          <X className="mr-1 h-4 w-4" />
-                          Tolak
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setGradingId(null)}>
-                          Batal
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => startGrade(sub)}>
-                      Nilai & Review
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
+          <div className="flex flex-wrap gap-2">
+            {(['pending', 'approved', 'rejected', 'all'] as const).map((f) => (
+              <Button
+                key={f}
+                size="sm"
+                variant={submissionFilter === f ? 'default' : 'outline'}
+                onClick={() => setSubmissionFilter(f)}
+              >
+                {f === 'pending' ? 'Menunggu' : f === 'approved' ? 'Disetujui' : f === 'rejected' ? 'Ditolak' : 'Semua'}
+              </Button>
             ))}
           </div>
-        </section>
-      )}
+        </div>
+
+        {submissionsLoading && <Skeleton className="h-32 w-full" />}
+
+        {submissionsError && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-medium">Gagal memuat pengumpulan</p>
+              <p className="mt-1">{submissionsError instanceof Error ? submissionsError.message : 'Error tidak diketahui'}</p>
+              <p className="mt-2 text-xs">
+                Pastikan migrasi{' '}
+                <code className="rounded bg-red-100 px-1">005_guru_review_submissions.sql</code> sudah dijalankan di
+                Supabase.
+              </p>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => refetchSubmissions()}>
+                Coba lagi
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!submissionsLoading && !submissionsError && !submissions?.length && (
+          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-[var(--color-muted-foreground)]">
+            {modules?.length
+              ? 'Belum ada siswa yang mengumpulkan untuk filter ini.'
+              : 'Buat modul literasi dulu. Siswa akan muncul di sini setelah mengumpulkan tugas.'}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {submissions?.map((sub) => (
+            <SubmissionCard
+              key={sub.id}
+              sub={sub}
+              gradingId={gradingId}
+              gradeScore={gradeScore}
+              gradeFeedback={gradeFeedback}
+              grading={gradeMutation.isPending}
+              onStartGrade={() => startGrade(sub)}
+              onCancelGrade={() => setGradingId(null)}
+              onScoreChange={setGradeScore}
+              onFeedbackChange={setGradeFeedback}
+              onApprove={() =>
+                gradeMutation.mutate({
+                  id: sub.id,
+                  status: 'approved',
+                  score: gradeScore,
+                  feedback: gradeFeedback,
+                  maxScore: sub.activity.max_score,
+                })
+              }
+              onReject={() =>
+                gradeMutation.mutate({
+                  id: sub.id,
+                  status: 'rejected',
+                  score: gradeScore,
+                  feedback: gradeFeedback,
+                  maxScore: sub.activity.max_score,
+                })
+              }
+            />
+          ))}
+        </div>
+      </section>
 
       <section>
         <h2 className="mb-3 font-semibold">Modul Literasi Saya</h2>
@@ -368,7 +503,12 @@ export function ManageLiteracyPage() {
                 onChange={(e) => setMaterialFile(e.target.files?.[0] ?? null)}
               />
               {editing?.content_url && !materialFile && (
-                <a href={editing.content_url} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-[var(--color-primary)]">
+                <a
+                  href={editing.content_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 block text-xs text-[var(--color-primary)]"
+                >
                   Lihat materi saat ini
                 </a>
               )}

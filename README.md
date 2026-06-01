@@ -37,6 +37,7 @@ npm install
    - Jangan gabungkan keduanya dalam satu Run (PostgreSQL error `unsafe use of new value "guru"`).
    - **Error daftar** `type "user_role" does not exist`: jalankan [`003_repair_signup.sql`](supabase/migrations/003_repair_signup.sql) di SQL Editor.
    - **Modul literasi guru** (materi, kuis, tugas, skor): jalankan [`004_literacy_guru.sql`](supabase/migrations/004_literacy_guru.sql).
+   - **Guru review pengumpulan siswa**: jalankan [`005_guru_review_submissions.sql`](supabase/migrations/005_guru_review_submissions.sql).
 3. Pastikan **Authentication → Email** aktif
 4. Bucket `book-covers` dan `book-pdfs` dibuat otomatis oleh migrasi
 
